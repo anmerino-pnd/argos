@@ -134,7 +134,7 @@ Resumen rápido:
 ```bash
 # En el server, como tu usuario (NO root):
 cd /opt   # o donde sea
-git clone <repo-url> argos
+git clone https://github.com/anmerino-pnd/argos argos
 cd argos
 
 # Build de la imagen
