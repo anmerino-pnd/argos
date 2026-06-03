@@ -1,0 +1,68 @@
+"""Pipeline: lee MySQL → upsert → embed pendientes → guarda embeddings."""
+import logging
+import time
+
+from argos.config.settings import get_settings
+from argos.ingest.embed import Embedder
+from argos.ingest.mysql_source import iter_products
+from argos.ingest.transform import transform
+from argos.ingest.upsert import (
+    fetch_pending_embeddings,
+    save_embeddings,
+    upsert_batch,
+)
+
+log = logging.getLogger(__name__)
+
+
+async def stage_sync_from_mysql() -> int:
+    """Etapa 1: trae productos de MySQL y los upsertea en Postgres."""
+    settings = get_settings()
+    total = 0
+    t0 = time.perf_counter()
+
+    async for raw_batch in iter_products(
+        batch_size=settings.ingest_batch_size,
+        limit=settings.ingest_sample_limit,
+    ):
+        rows = [transform(r) for r in raw_batch]
+        await upsert_batch(rows)
+        total += len(rows)
+        log.info("upsert: %d productos (acum %d)", len(rows), total)
+
+    log.info("sync MySQL→PG terminado: %d productos en %.1fs", total, time.perf_counter() - t0)
+    return total
+
+
+async def stage_embed_pending() -> int:
+    """Etapa 2: encuentra productos sin embedding y los embebe en batches."""
+    settings = get_settings()
+    embedder = Embedder()
+    total = 0
+    t0 = time.perf_counter()
+
+    while True:
+        pending = await fetch_pending_embeddings(
+            embedding_model=settings.embedding_model,
+            chunk_size=settings.embedding_batch_size,
+        )
+        if not pending:
+            break
+
+        ids = [pid for pid, _ in pending]
+        texts = [txt for _, txt in pending]
+
+        vectors = await embedder.embed_batch(texts)
+        await save_embeddings(list(zip(ids, vectors)), settings.embedding_model)
+
+        total += len(pending)
+        log.info("embed: %d productos (acum %d)", len(pending), total)
+
+    log.info("embedding terminado: %d productos en %.1fs", total, time.perf_counter() - t0)
+    return total
+
+
+async def run_full_ingest() -> tuple[int, int]:
+    synced = await stage_sync_from_mysql()
+    embedded = await stage_embed_pending()
+    return synced, embedded

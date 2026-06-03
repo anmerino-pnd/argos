@@ -1,0 +1,38 @@
+[project]
+name = "argos"
+version = "0.1.0"
+description = "Search engine for CT Internacional product catalog"
+authors = [
+    { name = "Angel Merino", email = "acedeno00@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "asyncpg>=0.30",
+    "sqlalchemy[asyncio]>=2.0",
+    "pgvector>=0.3",
+    "openai>=1.54",
+    "aiomysql>=0.2",
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "structlog>=24.4",
+    "cachetools>=7.1.4",
+]
+
+[project.scripts]
+argos = "argos:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+    "ipykernel>=6.29",
+]

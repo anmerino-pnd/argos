@@ -1,0 +1,4 @@
+.env
+argos.egg-info
+__pycache__
+scripts/
