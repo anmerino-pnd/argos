@@ -100,3 +100,38 @@ async def save_embeddings(
             """,
             records,
         )
+
+async def soft_delete_missing(seen_ids: set[int]) -> int:
+    """Marca como inactivos los productos que ya no están en MySQL.
+
+    Recibe el set completo de id_producto que se vieron en este sync.
+    Cualquier producto en Postgres con `activo = TRUE` y cuyo id NO esté
+    en seen_ids se considera borrado de la fuente y se soft-deletea.
+
+    Devuelve cuántos productos se marcaron como inactivos.
+
+    IMPORTANTE: SOLO llamar con la lista completa de IDs (sync full).
+    Si se llama con una lista parcial, se marcan como inactivos productos
+    que en realidad siguen activos en MySQL.
+    """
+    if not seen_ids:
+        # Defensa: no borres nada si la lista viene vacía (probablemente un bug).
+        return 0
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            """
+            WITH updated AS (
+                UPDATE productos
+                SET activo = FALSE,
+                    updated_at = NOW()
+                WHERE activo = TRUE
+                  AND id_producto != ALL($1::int[])
+                RETURNING id_producto
+            )
+            SELECT COUNT(*) FROM updated
+            """,
+            list(seen_ids),
+        )
+    return int(result or 0)
